@@ -28,3 +28,13 @@ output "cosmosdb_endpoint" {
   value       = azurerm_cosmosdb_account.cosmos.endpoint
   description = "Cosmos DB endpoint"
 }
+
+output "cosmosdb_database_name" {
+  value       = azurerm_cosmosdb_sql_database.iconnectdb.name
+  description = "Cosmos DB database name"
+}
+
+output "cosmosdb_users_container_name" {
+  value       = azurerm_cosmosdb_sql_container.users.name
+  description = "Cosmos DB users container name"
+}

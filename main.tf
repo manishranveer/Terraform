@@ -158,7 +158,7 @@ resource "azurerm_key_vault" "kv" {
 }
 
 # -----------------------------
-# Cosmos DB (SQL API)
+# Cosmos DB Account (SQL API)
 # -----------------------------
 resource "azurerm_cosmosdb_account" "cosmos" {
   name                = "${local.project}cosmos${random_id.suffix.hex}"
@@ -175,7 +175,30 @@ resource "azurerm_cosmosdb_account" "cosmos" {
     location          = azurerm_resource_group.rg.location
     failover_priority = 0
   }
+}
 
-  tags = var.tags
+# -----------------------------
+# Cosmos DB SQL Database
+# -----------------------------
+resource "azurerm_cosmosdb_sql_database" "iconnectdb" {
+  name                = "iconnectdb"
+  resource_group_name = azurerm_resource_group.rg.name
+  account_name        = azurerm_cosmosdb_account.cosmos.name
+}
+
+# -----------------------------
+# Cosmos DB SQL Container
+# -----------------------------
+resource "azurerm_cosmosdb_sql_container" "users" {
+  name                = "Users"
+  resource_group_name = azurerm_resource_group.rg.name
+  account_name        = azurerm_cosmosdb_account.cosmos.name
+  database_name       = azurerm_cosmosdb_sql_database.iconnectdb.name
+  partition_key_path  = "/userId"
+  throughput          = 400
+
+  indexing_policy {
+    indexing_mode = "consistent"
+  }
 }
 
