@@ -1,35 +1,53 @@
-# sanitize project name for resource-name composition
+############################################
+# MAIN.TF – Production-ready Terraform File
+# Resources: Resource Group, Storage + Containers, SAS Token,
+#            Key Vault, Cosmos DB
+############################################
+
+# -----------------------------
+# Locals
+# Used for sanitized project naming
+# -----------------------------
 locals {
+  # Project name sanitized: lowercase, no hyphens
   project = lower(replace(var.project_name, "-", ""))
 }
 
-# client info for Key Vault access policy
+# -----------------------------
+# Current Client Info (who runs Terraform)
+# Used for Key Vault access policy
+# -----------------------------
 data "azurerm_client_config" "current" {}
 
-# Random suffix for unique naming
+# -----------------------------
+# Random values for unique naming
+# -----------------------------
 resource "random_string" "suffix" {
   length  = 6
   upper   = false
   special = false
 }
 
-# random suffixes for guaranteed unique names (hex strings)
 resource "random_id" "suffix" {
-  byte_length = 3   # 6 hex chars
+  byte_length = 3 # 6 hex chars
 }
 
 resource "random_id" "kv_suffix" {
-  byte_length = 2   # 4 hex chars
+  byte_length = 2 # 4 hex chars
 }
 
-# Resource Group (unique)
+# -----------------------------
+# Resource Group
+# -----------------------------
 resource "azurerm_resource_group" "rg" {
   name     = "${local.project}-rg-${random_id.suffix.hex}"
   location = var.location
   tags     = var.tags
 }
 
-# Storage Account (name must be 3-24 lowercase letters/numbers)
+# -----------------------------
+# Storage Account
+# -----------------------------
 resource "azurerm_storage_account" "storage" {
   name                     = "${local.project}store${random_id.suffix.hex}"
   resource_group_name      = azurerm_resource_group.rg.name
@@ -41,9 +59,74 @@ resource "azurerm_storage_account" "storage" {
   tags                     = var.tags
 }
 
-# Key Vault (give current CLI principal access)
+# -----------------------------
+# Storage Containers
+# -----------------------------
+resource "azurerm_storage_container" "media" {
+  name                  = "media"
+  storage_account_name  = azurerm_storage_account.storage.name
+  container_access_type = "private"
+}
+
+resource "azurerm_storage_container" "profilepics" {
+  name                  = "profilepics"
+  storage_account_name  = azurerm_storage_account.storage.name
+  container_access_type = "private"
+}
+
+resource "azurerm_storage_container" "messagecontent" {
+  name                  = "messagecontent"
+  storage_account_name  = azurerm_storage_account.storage.name
+  container_access_type = "private"
+}
+
+# -----------------------------
+# SAS Token for Blob Storage (Write Access Only)
+# -----------------------------
+data "azurerm_storage_account_sas" "write_sas" {
+  connection_string = azurerm_storage_account.storage.primary_connection_string
+  https_only        = true
+
+  # Define which resource types can be accessed
+  resource_types {
+    service   = true
+    container = true
+    object    = true
+  }
+
+  # Only Blob service enabled
+  services {
+    blob  = true
+    file  = false
+    queue = false
+    table = false
+  }
+
+  # Validity
+  start  = formatdate("YYYY-MM-DD", timestamp())
+  expiry = formatdate("YYYY-MM-DD", timeadd(timestamp(), "168h")) # 7 days
+
+  # Permissions – write only
+  permissions {
+    read    = false
+    write   = true
+    delete  = false
+    list    = false
+    add     = false
+    create  = false
+    update  = false
+    process = false
+    tag     = false
+    filter  = false
+  }
+}
+
+# -----------------------------
+# Key Vault
+# -----------------------------
 resource "azurerm_key_vault" "kv" {
-  name                        = "iconnect-kv-${random_string.suffix.result}"
+  # Key Vault names are globally unique, so add random suffix
+  name                        = "${local.project}kv${random_id.kv_suffix.hex}"
   location                    = azurerm_resource_group.rg.location
   resource_group_name         = azurerm_resource_group.rg.name
   tenant_id                   = data.azurerm_client_config.current.tenant_id
@@ -51,27 +134,32 @@ resource "azurerm_key_vault" "kv" {
   purge_protection_enabled    = false
   soft_delete_retention_days  = 7
 
+  # Give current principal full access
   access_policy {
     tenant_id = data.azurerm_client_config.current.tenant_id
     object_id = data.azurerm_client_config.current.object_id
 
     key_permissions = [
-      "Get", "List", "Update", "Create", "Import", "Delete", "Recover", "Backup", "Restore",
-      "Decrypt", "Encrypt", "UnwrapKey", "WrapKey", "Verify", "Sign", "Purge"
+      "Get", "List", "Update", "Create", "Import", "Delete",
+      "Recover", "Backup", "Restore", "Decrypt", "Encrypt",
+      "UnwrapKey", "WrapKey", "Verify", "Sign", "Purge"
     ]
 
     secret_permissions = [
-      "Get", "List", "Set", "Delete", "Recover", "Backup", "Restore", "Purge"
+      "Get", "List", "Set", "Delete", "Recover",
+      "Backup", "Restore", "Purge"
     ]
 
     certificate_permissions = [
-      "Get", "List", "Update", "Create", "Import", "Delete", "Recover", "Backup", "Restore", "Purge"
+      "Get", "List", "Update", "Create", "Import",
+      "Delete", "Recover", "Backup", "Restore", "Purge"
     ]
   }
 }
 
-
-# Cosmos DB (SQL API / Core)
+# -----------------------------
+# Cosmos DB (SQL API)
+# -----------------------------
 resource "azurerm_cosmosdb_account" "cosmos" {
   name                = "${local.project}cosmos${random_id.suffix.hex}"
   location            = azurerm_resource_group.rg.location
@@ -90,3 +178,4 @@ resource "azurerm_cosmosdb_account" "cosmos" {
 
   tags = var.tags
 }
+

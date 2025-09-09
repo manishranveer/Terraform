@@ -3,10 +3,6 @@ output "resource_group_name" {
   description = "Resource Group created"
 }
 
-output "storage_account_name" {
-  value       = azurerm_storage_account.storage.name
-  description = "Storage account name"
-}
 
 output "storage_primary_blob_endpoint" {
   value       = azurerm_storage_account.storage.primary_blob_endpoint
