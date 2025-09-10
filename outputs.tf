@@ -38,3 +38,9 @@ output "cosmosdb_users_container_name" {
   value       = azurerm_cosmosdb_sql_container.users.name
   description = "Cosmos DB users container name"
 }
+
+# Output kubeconfig
+output "kube_config" {
+  value     = azurerm_kubernetes_cluster.aks.kube_config_raw
+  sensitive = true
+}

@@ -202,3 +202,39 @@ resource "azurerm_cosmosdb_sql_container" "users" {
   }
 }
 
+
+
+# -----------------------------
+# Azure Container Registry (ACR)
+# -----------------------------
+resource "azurerm_container_registry" "acr" {
+  name                = "${local.project}acr${random_id.suffix.hex}" # globally unique
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  sku                 = "Basic"
+  admin_enabled       = false
+}
+
+# -----------------------------
+# Azure Kubernetes Service (AKS)
+# -----------------------------
+resource "azurerm_kubernetes_cluster" "aks" {
+  name                = "${local.project}-aks-cluster"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  dns_prefix          = "${local.project}-aks"
+
+  default_node_pool {
+    name       = "systempool"
+    node_count = 2
+    vm_size    = "Standard_B2ms"
+  }
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  # Enable RBAC (best practice)
+  role_based_access_control_enabled = true
+}
+
